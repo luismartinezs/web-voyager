@@ -2,6 +2,9 @@
 
 Web Voyager is an AI agent that autonomously navigates and interacts with web pages using Playwright. It uses GPT-4 to interpret web content and make decisions on how to interact with the page to accomplish user-defined tasks.
 
+
+![Screenshot 2024-11-24 at 09 19 32](https://github.com/user-attachments/assets/20d9d4f8-9d3c-423e-a95a-b8a4b21ff7de)
+
 ## Features
 
 - Autonomous web navigation and interaction

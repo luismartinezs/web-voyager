@@ -58,7 +58,6 @@ import platform
 # TOOLS
 
 async def click(state: AgentState):
-    # - Click [Numerical_Label]
     page = state["page"]
     click_args = state["prediction"]["args"]
     if click_args is None or len(click_args) != 1:
@@ -70,11 +69,28 @@ async def click(state: AgentState):
     except Exception:
         return f"Error: no bbox for : {bbox_id}"
     x, y = bbox["x"], bbox["y"]
+    
+    # Check if the element is visible and clickable
+    is_visible = await page.evaluate(f"""
+        () => {{
+            const element = document.elementFromPoint({x}, {y});
+            if (!element) return false;
+            const rect = element.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0 && 
+                   window.getComputedStyle(element).visibility !== 'hidden';
+        }}
+    """)
+    
+    if not is_visible:
+        return f"Element at bbox {bbox_id} is not visible or clickable"
+    
     await page.mouse.click(x, y)
-    # TODO: In the paper, they automatically parse any downloaded PDFs
-    # We could add something similar here as well and generally
-    # improve response format.
-    return f"Clicked {bbox_id}"
+    await asyncio.sleep(2)
+    
+    # Check if the page URL changed after clicking
+    new_url = page.url
+    
+    return f"Clicked {bbox_id}. Element type: {bbox['type']}. Text: '{bbox['text']}'. URL after click: {new_url}"
 
 
 async def type_text(state: AgentState):
@@ -96,6 +112,7 @@ async def type_text(state: AgentState):
     await page.keyboard.press("Backspace")
     await page.keyboard.type(text_content)
     await page.keyboard.press("Enter")
+    await asyncio.sleep(2)
     return f"Typed {text_content} and submitted"
 
 
@@ -164,7 +181,16 @@ async def mark_page(page):
     await page.evaluate(mark_page_script)
     for _ in range(10):
         try:
-            bboxes = await page.evaluate("markPage()")
+            bboxes = await page.evaluate("""
+                () => {
+                    const bboxes = markPage();
+                    return bboxes.map(bbox => {
+                        const element = document.elementFromPoint(bbox.x, bbox.y);
+                        bbox.zIndex = element ? window.getComputedStyle(element).zIndex : 'auto';
+                        return bbox;
+                    });
+                }
+            """)
             break
         except Exception:
             # May be loading...
@@ -205,7 +231,8 @@ def format_descriptions(state):
         if not text.strip():
             text = bbox["text"]
         el_type = bbox.get("type")
-        labels.append(f'{i} (<{el_type}/>): "{text}"')
+        z_index = bbox.get("zIndex", "unknown")
+        labels.append(f'{i} (<{el_type}/> z-index: {z_index}): "{text}"')
     bbox_descriptions = "\nValid Bounding Boxes:\n" + "\n".join(labels)
     return {**state, "bbox_descriptions": bbox_descriptions}
 
@@ -232,7 +259,7 @@ def parse(text: str) -> dict:
 
 # Will need a later version of langchain to pull
 # this image prompt template
-prompt = hub.pull("wfh/web-voyager")
+prompt = hub.pull("samthesquirrel/web-voyager")
 
 llm = ChatOpenAI(model="gpt-4o", max_tokens=4096)
 agent = annotate | RunnablePassthrough.assign(
@@ -249,8 +276,13 @@ def update_scratchpad(state: AgentState):
     old = state.get("scratchpad")
     if old:
         txt = old[0].content
-        last_line = txt.rsplit("\n", 1)[-1]
-        step = int(re.match(r"\d+", last_line).group()) + 1
+        # Find all step numbers in the text
+        steps = re.findall(r'\n(\d+)\. ', txt)
+        if steps:
+            # Get the last (highest) step number
+            step = int(steps[-1]) + 1
+        else:
+            step = 1
     else:
         txt = "Previous action observations:\n"
         step = 1
@@ -387,6 +419,7 @@ class IncrementalHTMLGenerator:
             f.write(self.html_content)
 
 async def call_agent(question: str, page, max_steps: int = 150):
+    print(f"Calling agent with question: {question}")
     event_stream = graph.astream(
         {
             "page": page,

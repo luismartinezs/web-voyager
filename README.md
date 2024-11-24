@@ -9,6 +9,11 @@ Web Voyager is an AI agent that autonomously navigates and interacts with web pa
 - Task-oriented decision making
 - HTML report generation with screenshots
 
+
+## Cost Warning
+
+⚠️ **Important**: This project uses GPT-4o for analyzing web pages and making decisions. Each interaction typically involves processing screenshots and multiple API calls. Costs can accumulate quickly, especially during extended browsing sessions. Please monitor your OpenAI API usage carefully.
+
 ## Requirements
 
 - Python 3.7+
@@ -17,28 +22,15 @@ Web Voyager is an AI agent that autonomously navigates and interacts with web pa
 - OpenAI API key
 
 ## Usage
-
 1. Set up environment variables:
    - `LANGCHAIN_API_KEY`
    - `OPENAI_API_KEY`
+   - `LANGCHAIN_TRACING_V2=true`
+   - `LANGCHAIN_API_KEY=<your-api-key>`
 
-2. Run the agent:
+2. Start the script `browse.py`. Playwright browser will open with a chat window where you can ask for assistance while browsing the web.
 
-```python
-from voyager import call_agent, async_playwright
-import asyncio
-
-async def main():
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
-        page = await browser.new_page()
-        await page.goto("https://www.google.com")
-        result = await call_agent("Your task description here", page)
-        print(f"Final response: {result}")
-        await browser.close()
-
-asyncio.run(main())
-```
+3. To custimiza the profile picture, replace the "me.jpeg" image.
 
 3. View the generated `web_voyager_results.html` for a step-by-step breakdown of the agent's actions and screenshots.
 
@@ -54,3 +46,4 @@ asyncio.run(main())
 
 - Requires a valid OpenAI API key with GPT-4 access
 - Performance may vary depending on the complexity of the web pages and tasks
+- Extended sessions can incur significant API costs due to frequent image processing and GPT-4 calls

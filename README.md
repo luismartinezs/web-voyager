@@ -1,6 +1,6 @@
 # Web Voyager Chat Assistant
 
-Web Voyager is an AI agent that autonomously navigates and interacts with web pages using the Playwright browser. It uses GPT-4 to interpret web content and make decisions on how to interact with the page to accomplish user-defined tasks.
+Web Voyager is an AI agent that autonomously navigates and interacts with web pages using the Playwright browser. It uses GPT-4o (customizable) to interpret web content and make decisions on how to interact with the page to accomplish user-defined tasks.
 
 This is a version where it is included as a chat window inside the browser, to be used as a personal assistant while browsing.
 

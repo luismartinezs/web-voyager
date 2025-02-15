@@ -4,14 +4,18 @@ from getpass import getpass
 import warnings
 import sys
 import asyncio
+from dotenv import load_dotenv
 
 if sys.platform == 'darwin':
     asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
 
 def _getpass(env_var: str):
-    if not os.environ.get(env_var):
+    # Check if variable exists in environment (including .env file)
+    if not os.getenv(env_var):
         os.environ[env_var] = getpass(f"{env_var}=")
 
+# Add this before setting environment variables
+load_dotenv()  # This will load environment variables from .env file
 
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_PROJECT"] = "Web-Voyager"
@@ -69,27 +73,27 @@ async def click(state: AgentState):
     except Exception:
         return f"Error: no bbox for : {bbox_id}"
     x, y = bbox["x"], bbox["y"]
-    
+
     # Check if the element is visible and clickable
     is_visible = await page.evaluate(f"""
         () => {{
             const element = document.elementFromPoint({x}, {y});
             if (!element) return false;
             const rect = element.getBoundingClientRect();
-            return rect.width > 0 && rect.height > 0 && 
+            return rect.width > 0 && rect.height > 0 &&
                    window.getComputedStyle(element).visibility !== 'hidden';
         }}
     """)
-    
+
     if not is_visible:
         return f"Element at bbox {bbox_id} is not visible or clickable"
-    
+
     await page.mouse.click(x, y)
     await asyncio.sleep(2)
-    
+
     # Check if the page URL changed after clicking
     new_url = page.url
-    
+
     return f"Clicked {bbox_id}. Element type: {bbox['type']}. Text: '{bbox['text']}'. URL after click: {new_url}"
 
 
@@ -196,15 +200,15 @@ async def mark_page(page):
             # May be loading...
             asyncio.sleep(3)
     screenshot = await page.screenshot()
-    
+
 
     image = Image.open(io.BytesIO(screenshot))
-    resized_image = image.resize((800, 600))  
-    
+    resized_image = image.resize((800, 600))
+
     with io.BytesIO() as output:
         resized_image.save(output, format="PNG")
         resized_screenshot = output.getvalue()
-    
+
     # Ensure the bboxes don't follow us around
     await page.evaluate("unmarkPage()")
     return {
@@ -261,7 +265,7 @@ def parse(text: str) -> dict:
 # this image prompt template
 prompt = hub.pull("samthesquirrel/web-voyager")
 
-llm = ChatOpenAI(model="gpt-4o", max_tokens=4096)
+llm = ChatOpenAI(model="gpt-4o-mini", max_tokens=4096)
 agent = annotate | RunnablePassthrough.assign(
     prediction=format_descriptions | prompt | llm | StrOutputParser() | parse
 )
@@ -395,7 +399,7 @@ class IncrementalHTMLGenerator:
         step_number = len(self.steps) + 1
         step_content = f"{step_number}. {action}: {action_input}"
         self.steps.append(step_content)
-        
+
         self.html_content += f"""
         <div class="step">
             <div class="step-content">{step_content}</div>
@@ -432,23 +436,23 @@ async def call_agent(question: str, page, max_steps: int = 150):
     )
     final_answer = None
     html_generator = IncrementalHTMLGenerator()
-    
+
     async for event in event_stream:
         if "agent" not in event:
             continue
         pred = event["agent"].get("prediction") or {}
         action = pred.get("action")
         action_input = pred.get("args")
-        
+
         html_generator.add_step(action, action_input, event["agent"]["img"])
-        
+
         if "ANSWER" in action:
             final_answer = action_input[0]
             break
-    
+
     html_generator.set_final_answer(final_answer)
     html_generator.write_html("web_voyager_results.html")
-    
+
     return final_answer
 
 def generate_html(steps, images, final_answer):
@@ -468,7 +472,7 @@ def generate_html(steps, images, final_answer):
     </body>
     </html>
     """
-    
+
     steps_html = ""
     for i, (step, img) in enumerate(zip(steps, images)):
         steps_html += f"""
@@ -477,7 +481,7 @@ def generate_html(steps, images, final_answer):
             <img src="data:image/png;base64,{img}" alt="Step {i+1} Image">
         </div>
         """
-    
+
     return html_template.format(steps_html=steps_html, final_answer=final_answer)
 
 

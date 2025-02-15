@@ -4,11 +4,14 @@ import logging
 import json
 import base64
 from pathlib import Path
+from dotenv import load_dotenv
 
 logging.basicConfig(filename='demo_errors.log', level=logging.ERROR)
 
 # Add this global variable at the top of the file
 is_processing_query = False
+
+load_dotenv()
 
 def get_profile_image_base64():
     try:
@@ -29,7 +32,7 @@ async def inject_chat_interface(page):
             await page.evaluate(f"""
             () => {{
                 if (document.getElementById('ai-chat-window')) return;
-                                
+
                 const chatHtml = `
                     <div id="ai-chat-window" style="position: fixed; bottom: 20px; right: 20px; width: 300px; background-color: white; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); z-index: 2147483647; display: none; flex-direction: column; font-family: Arial, sans-serif;">
                         <div style="background-color: #4a90e2; color: white; padding: 10px; border-top-left-radius: 10px; border-top-right-radius: 10px; display: flex; align-items: center;">
@@ -43,22 +46,22 @@ async def inject_chat_interface(page):
                         </div>
                     </div>
                 `;
-                
+
                 document.body.insertAdjacentHTML('beforeend', chatHtml);
-                
+
                 const chatWindow = document.getElementById('ai-chat-window');
                 const chatMessages = document.getElementById('ai-chat-messages');
                 const chatInput = document.getElementById('ai-chat-input');
                 const chatSend = document.getElementById('ai-chat-send');
                 const chatInputArea = document.getElementById('ai-chat-input-area');
-                
+
                 // Load previous messages from localStorage
                 const savedMessages = localStorage.getItem('aiChatMessages');
                 if (savedMessages) {{
                     chatMessages.innerHTML = savedMessages;
                     chatMessages.scrollTop = chatMessages.scrollHeight;
                 }}
-                
+
                 chatSend.addEventListener('click', () => {{
                     const query = chatInput.value;
                     if (query.trim()) {{
@@ -68,30 +71,30 @@ async def inject_chat_interface(page):
                         chatInputArea.style.display = 'none';
                         chatMessages.innerHTML += '<p><em>Elins Agent working...</em></p>';
                         chatMessages.scrollTop = chatMessages.scrollHeight;
-                        
+
                         // Save messages to localStorage
                         localStorage.setItem('aiChatMessages', chatMessages.innerHTML);
-                        
+
                         window.callAgent(query);
                     }}
                 }});
-                
+
                 chatInput.addEventListener('keypress', (e) => {{
                     if (e.key === 'Enter') {{
                         chatSend.click();
                     }}
                 }});
-                
+
                 window.addAgentResponse = (response) => {{
                     chatMessages.innerHTML = chatMessages.innerHTML.replace('<p><em>Elins Agent working...</em></p>', '');
                     const agentMessage = `<p><strong>Agent:</strong> ${{response}}</p>`;
                     chatMessages.innerHTML += agentMessage;
                     chatMessages.scrollTop = chatMessages.scrollHeight;
                     chatInputArea.style.display = 'flex';
-                    
+
                     // Save messages to localStorage
                     localStorage.setItem('aiChatMessages', chatMessages.innerHTML);
-                    
+
                     // Signal that processing is complete
                     window.isProcessingQuery = false;
                 }};
@@ -117,7 +120,7 @@ async def call_agent_wrapper(query, page):
     try:
         is_processing_query = True
         await page.evaluate("window.isProcessingQuery = true;")
-        
+
         result = await call_agent(query, page)
         print(f"Final response: {result}")
 
@@ -135,13 +138,13 @@ async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
         context = await browser.new_context()
-        
+
         # Set up event listener for page creation
         context.on("page", lambda page: asyncio.ensure_future(setup_new_page(page)))
-        
+
         page = await context.new_page()
         await page.goto("https://www.google.com")
-        
+
         # Set up the initial page
         await setup_page(page)
 
@@ -165,14 +168,14 @@ async def setup_page(page):
     try:
         await inject_chat_interface(page)
         await page.expose_function("callAgent", lambda query: asyncio.ensure_future(call_agent_wrapper(query, page)))
-        
+
         # Modified navigation handler with error handling
         async def on_navigation():
             try:
                 global is_processing_query
                 await inject_chat_interface(page)
                 await asyncio.sleep(0.5)
-                
+
                 if not page.is_closed():  # Check if page is still valid
                     if not is_processing_query:
                         await page.evaluate("document.getElementById('ai-chat-window').style.display = 'flex';")
@@ -180,7 +183,7 @@ async def setup_page(page):
                         await page.evaluate("document.getElementById('ai-chat-input-area').style.display = 'none';")
             except Exception as e:
                 logging.error(f"Error in on_navigation: {str(e)}")
-        
+
         page.on("load", lambda _: asyncio.ensure_future(on_navigation()))
     except Exception as e:
         logging.error(f"Error in setup_page: {str(e)}")
